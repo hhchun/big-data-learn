@@ -2,12 +2,12 @@
 
 # 1、HDFS概述
 
-## 1.1、HDFS的定义
+## 1.1、HDFS定义
 
 * HDFS（Hadoop Distributed File System），它是一个文件系统；其次，它是分布式的。
 * HDFS的使用场景：适合一次写入，多次读出的场景。
 
-## 1.2、HDFS的优点
+## 1.2、HDFS优点
 
 1. 高容错性
 
@@ -20,7 +20,7 @@
 
 3. 可构建在廉价机器上，通过多副本机制，提高可用性。
 
-## 1.3、HDFS的缺点
+## 1.3、HDFS缺点
 
 1. 不适合低延迟数据访问，比如毫秒级无法做到。
 
@@ -37,7 +37,7 @@
 
      ![不支持文件修改](https://qqs-images.oss-cn-shenzhen.aliyuncs.com/%E4%B8%8D%E6%94%AF%E6%8C%81%E6%96%87%E4%BB%B6%E4%BF%AE%E6%94%B9.svg)
 
-## 1.4、HDFS的组成架构
+## 1.4、HDFS组成架构
 
 ![HDFS组成架构](https://qqs-images.oss-cn-shenzhen.aliyuncs.com/HDFS%E7%BB%84%E6%88%90%E6%9E%B6%E6%9E%84.svg)
 
@@ -73,7 +73,7 @@
   * 如果块设置太大，从磁盘传输数据的时间会明显大于定位这个块开始位置所需的时间（寻址时间）。导致在处理块数据时，会非常慢。
   * **总结：HDFS块的大小设置主要取决于磁盘传输速率**。
 
-# 2、HDFS的命令操作
+# 2、HDFS命令操作
 
 ## 2.1、基本语法
 
@@ -240,7 +240,7 @@
 
   > 注意：设置的副本数只是记录在NameNode的元数据中，是否真会有这么多副本，需要看DataNode的数量。
 
-# 3、HDFS的API操作
+# 3、HDFS API操作
 
 ## 3.1、客户端环境准备
 
@@ -385,9 +385,9 @@ public void fileJudge() throws Exception {
 }
 ```
 
-# 4、HDFS的读写流程
+# 4、HDFS读写流程
 
-## 4.1、HDFS的数据写流程
+## 4.1、HDFS数据写流程
 
 ![HDFS写数据流程](https://qqs-images.oss-cn-shenzhen.aliyuncs.com/HDFS%E5%86%99%E6%95%B0%E6%8D%AE%E6%B5%81%E7%A8%8B.svg)
 
