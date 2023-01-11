@@ -273,7 +273,7 @@
 
 # 3、HDFS API操作
 
-* 本章节的代码：[hdfs](../code\hdfs)
+* 本章节的代码：[hdfs](../code/hdfs)
 
 ## 3.1、客户端环境准备
 
