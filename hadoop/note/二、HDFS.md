@@ -273,6 +273,8 @@
 
 # 3、HDFS API操作
 
+* 本章节的代码：[hdfs](../code\hdfs)
+
 ## 3.1、客户端环境准备
 
 * 下载依赖文件：https://github.com/cdarlint/winutils
