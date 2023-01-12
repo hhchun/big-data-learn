@@ -75,7 +75,7 @@ MapReduce的程序分成三部分：
 
 1. 需求：给定文本文件，统计文件中每个单词出现的总次数。
 
-2. 文件：[wordcount.txt](../input/wordcount.txt)
+2. 文件：[wordcount.txt](../input/mapreduce/wordcount/wordcount.txt)
 
 3. 需求分析：
 
