@@ -1,4 +1,38 @@
-# 1、MapReduce概述
+# 1、MapReduce概述- [1、MapReduce概述](#1mapreduce概述)
+- [1、MapReduce概述- 1、MapReduce概述](#1mapreduce概述--1mapreduce概述)
+  - [1.1、MapReduce定义](#11mapreduce定义)
+  - [1.2、MapReduce优缺点](#12mapreduce优缺点)
+  - [1.3、MapReduce核心思想](#13mapreduce核心思想)
+  - [1.4、MapReduce进程](#14mapreduce进程)
+- [2、MapReduce入门](#2mapreduce入门)
+  - [2.1、常用数据序列化类型](#21常用数据序列化类型)
+  - [2.2、MapReduce编程规范](#22mapreduce编程规范)
+  - [2.3、WordCount案例实操](#23wordcount案例实操)
+- [3、Hadoop序列化](#3hadoop序列化)
+  - [3.1、序列化概述](#31序列化概述)
+  - [3.2、自定义Bean使用Hadoop序列化的步骤](#32自定义bean使用hadoop序列化的步骤)
+  - [3.3、Hadoop序列化案例](#33hadoop序列化案例)
+- [4、MapReduce核心原理](#4mapreduce核心原理)
+  - [4.1、数据输入：InputFormat](#41数据输入inputformat)
+  - [4.2、MapReduce工作流程](#42mapreduce工作流程)
+  - [4.3、Shuffle机制](#43shuffle机制)
+  - [4.4、数据输出：OutputFormat](#44数据输出outputformat)
+  - [4.5、MapReduce源码解析](#45mapreduce源码解析)
+    - [4.5.1、MapTask工作机制](#451maptask工作机制)
+    - [4.5.2、ReduceTask工作机制](#452reducetask工作机制)
+    - [4.5.3、ReduceTask并行度决定机制](#453reducetask并行度决定机制)
+    - [4.5.4、MapTask \& ReduceTask源码解析](#454maptask--reducetask源码解析)
+  - [4.6、Join应用](#46join应用)
+  - [4.7、数据清洗（ETL）](#47数据清洗etl)
+  - [4.8、MapReduce开发总结](#48mapreduce开发总结)
+- [5、Hadoop数据压缩](#5hadoop数据压缩)
+  - [5.1、概述](#51概述)
+  - [5.2、MapReduce支持的压缩编码](#52mapreduce支持的压缩编码)
+  - [5.3、压缩方式选择](#53压缩方式选择)
+  - [5.4、压缩参数配置](#54压缩参数配置)
+  - [5.5、压缩实操案例](#55压缩实操案例)
+- [6、常见错误及解决方案](#6常见错误及解决方案)
+
 
 ## 1.1、MapReduce定义
 
@@ -356,11 +390,203 @@ MapReduce的程序分成三部分：
 
 ## 3.3、Hadoop序列化案例
 
-
+* code：[hadoop序列化案例代码](../code/mapreduce/serialize)
+* 案例数据：[案例数据](../input/mapreduce/serialize/phone.txt)
+* 注意：代码中的输入路径和输出路径的都是使用参数传入的方式指定的。如果不会指定请参考：[WordCount案例实操](#23wordcount案例实操) 的第9点。
 
 # 4、MapReduce核心原理
 
 ## 4.1、数据输入：InputFormat
+
+### 4.1.1、切片与MapTask并行度决定机制
+
+1. 问题引出
+
+   1. MapTask的并行度决定Map阶段的任务处理并发度，进而影响到整个Job的处理速度。
+   2. 思考：1G的数据，启动8个MapTask，可以提高集群的并发处理能力。那么1K的数据，也启动8个MapTask，会提高集群性能吗？MapTask并行任务是否越多越好呢？哪些因素影响了MapTask并行度？
+
+2. MapTask并行度决定机制
+
+   > 了解MapTask并行度决定机制之前先了解数据块和数据切片的概念。
+   >
+   > * **数据块：**HDFS物理存储数据的单位。
+   > * **数据切片：**逻辑上对输入数据进行分片，并不会在磁盘上将其切分成片存储。**数据切片是MapReduce输入数据的单位**，一个切片会对应启动一个MapTask。
+
+   1. Map阶段的并行度由客户端在提交Job时的切片数决定的。
+   2. 每个切片分配一个MapTask实例来处理。
+   3. 切片默认大小=BlockSize（数据块大小）。
+   4. 在进行切片时是单独针对每个文件进行切片的，而不是针对整个数据集整体。
+
+### 4.1.2、Job提交流程源码和切片源码分析
+
+> 注意：这里只是简单大致的对源码进行分析，不会探讨太多的细节。
+
+1. Job提交流程源码分析：
+
+   1. Driver中使用**waitForCompletion**触发提交Job。
+
+   2. 在waitForCompletion中在调用**submit**方法处理提交Job。
+
+   3. 在submit方法中调用**connect**方法建立连接。
+
+      ```java
+      private synchronized void connect()
+          throws IOException, InterruptedException, ClassNotFoundException {
+          if (cluster == null) {
+              cluster = 
+                  ugi.doAs(new PrivilegedExceptionAction<Cluster>() {
+                      public Cluster run()
+                          throws IOException, InterruptedException, 
+                      ClassNotFoundException {
+                          // 创建提交Job的代理,调用Cluster构造器创建
+                          return new Cluster(getConfiguration());
+                      }
+                  });
+          }
+      }
+      
+      // Cluster构造器
+      public Cluster(InetSocketAddress jobTrackAddr, Configuration conf) 
+          throws IOException {
+          this.conf = conf;
+          this.ugi = UserGroupInformation.getCurrentUser();
+          // 判断是本地运行环境还是yarn集群运行环境
+          initialize(jobTrackAddr, conf);
+      }
+      ```
+
+   4. 在submit方法中先创建一个**JobSubmitter**（提交工作者），由它来提交Job。
+
+      ```java
+      public void submit() 
+          throws IOException, InterruptedException, ClassNotFoundException {
+          // ...
+          connect();
+          // 创建提交工作者
+          final JobSubmitter submitter = 
+              getJobSubmitter(cluster.getFileSystem(), cluster.getClient());
+          
+          status = ugi.doAs(new PrivilegedExceptionAction<JobStatus>() {
+              public JobStatus run() throws IOException, InterruptedException, 
+              ClassNotFoundException {
+                  // 提交job
+                  return submitter.submitJobInternal(Job.this, cluster);
+              }
+          });
+      }
+      ```
+
+   5. 提交Job
+
+      ```java
+      JobStatus submitJobInternal(Job job, Cluster cluster) 
+          throws ClassNotFoundException, InterruptedException, IOException {
+          // 创建给集群提交数据的Stag路径
+          Path jobStagingArea = JobSubmissionFiles.getStagingDir(cluster, conf);
+          
+          // 获取jobid ，并创建Job路径
+          JobID jobId = submitClient.getNewJobID();
+          copyAndConfigureFiles(job, submitJobDir); 
+          // copyAndConfigureFiles方法内调用
+          rUploader.uploadResources(job, jobSubmitDir);
+          
+          // 计算切片，生成切片规划文件
+         	int maps = writeSplits(job, submitJobDir);
+          // writeSplits方法内调用
+          maps = writeNewSplits(job, jobSubmitDir);
+          // writeNewSplits方法内调用
+          List<InputSplit> splits = input.getSplits(job);
+          
+          // 向Stag路径写XML配置文件
+          writeConf(conf, submitJobFile);
+          // writeConf方法内调用
+          conf.writeXml(out);
+          
+          // 提交Job,返回提交状态
+          status = submitClient.submitJob(
+              jobId, submitJobDir.toString(), job.getCredentials());
+          
+      }
+      ```
+
+### 4.1.3、FileInputFormat切片源码分析
+
+> 在MapReduce中有很多InputFormat，这里就简单的拿FileInputFormat来进行分析，其他的都大同小异，思路都差不多。
+
+```java
+// 废话少说,直接上源码
+
+// 源码位置：org.apache.hadoop.mapreduce.lib.input.FileInputFormat#getSplits
+public List<InputSplit> getSplits(JobContext job) throws IOException {
+    // 1、尝试从配置文件中获取于切片大小相关的配置项
+    
+    // 尝试获取mapreduce.input.fileinputformat.split.minsize的值,
+    // 最小值的默认值是1,因为getFormatMinSplitSize返回值是1
+    long minSize = Math.max(getFormatMinSplitSize(), getMinSplitSize(job));
+    
+    // 获取mapreduce.input.fileinputformat.split.maxsize的值,
+    // 默认值是 Long.MAX_VALUE
+    long maxSize = getMaxSplitSize(job);
+
+    List<InputSplit> splits = new ArrayList<InputSplit>();
+    // 2、获取文件信息状态,挨个遍历
+    List<FileStatus> files = listStatus(job);
+    for (FileStatus file: files) {
+        Path path = file.getPath();
+        long length = file.getLen();
+        if (length != 0) {
+            
+            // 2.1、获取当前文件所有块的信息
+            BlockLocation[] blkLocations;
+            if (file instanceof LocatedFileStatus) {
+                blkLocations = ((LocatedFileStatus) file).getBlockLocations();
+            } else {
+             
+                FileSystem fs = path.getFileSystem(job.getConfiguration());
+                blkLocations = fs.getFileBlockLocations(file, 0, length);
+            }
+            
+            if (isSplitable(job, path)) {
+                // 2.2、获取当前文件块大小
+                long blockSize = file.getBlockSize();
+                // 2.3、计算切片大小 return Math.max(minSize, Math.min(maxSize, blockSize));
+                long splitSize = computeSplitSize(blockSize, minSize, maxSize);
+                
+                long bytesRemaining = length;
+                // 2.4、对剩余数量进行切片,每次切片都要判断剩余数量是否大于splitSize的1.1倍
+                while (((double) bytesRemaining)/splitSize > SPLIT_SLOP) {
+                    // 2.4.1、通过偏移量（offset=length-bytesRemaining）定位块的索引
+                    int blkIndex = getBlockIndex(blkLocations, length-bytesRemaining);
+                    // 2.4.2、记录切片的元数据信息，比如初始位置、大小、所在节点列表等。
+                    splits.add(makeSplit(path, length-bytesRemaining, splitSize,
+                                         blkLocations[blkIndex].getHosts(),
+                                         blkLocations[blkIndex].getCachedHosts()));
+                    // 2.4.3、记录切片后扣减剩余数量
+                    bytesRemaining -= splitSize;
+                }
+                
+                // 2.5、如果剩余的大小不足splitSize的1.1倍则单独作为一块切片
+                if (bytesRemaining != 0) {
+                    int blkIndex = getBlockIndex(blkLocations, length-bytesRemaining);
+                    splits.add(makeSplit(path, length-bytesRemaining, bytesRemaining,
+                                         blkLocations[blkIndex].getHosts(),
+                                         blkLocations[blkIndex].getCachedHosts()));
+                }
+                
+            }
+        }
+    }
+    return splits;
+}
+
+// 3、将切片规划文件提交到YARN,YARN上的MrAppMaster根据切片规划文件计算开启MapTask的个数。
+```
+
+### 4.1.4、FileInputFormat切片大小的参数配置
+
+* mapreduce.input.fileinputformat.split.maxsize：切片最大值，如果值比BlockSize小，则切片会变小并且值等于该参数的值。
+* mapreduce.input.fileinputformat.split.minsize：切片最小值，如果值比BlockSize大，则切片会变大并且值等于该参数的值。
+* 如果maxsize比BlockSize小并且minsize比BlockSize大，则最终生效的是minsize，因为源码中是这样判断的`Math.max(minSize, Math.min(maxSize, blockSize))`，具体细节看源码。
 
 ## 4.2、MapReduce工作流程
 
