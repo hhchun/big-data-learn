@@ -1,5 +1,4 @@
-# 1、MapReduce概述- [1、MapReduce概述](#1mapreduce概述)
-- [1、MapReduce概述- 1、MapReduce概述](#1mapreduce概述--1mapreduce概述)
+- [1、MapReduce概述](#1mapreduce概述)
   - [1.1、MapReduce定义](#11mapreduce定义)
   - [1.2、MapReduce优缺点](#12mapreduce优缺点)
   - [1.3、MapReduce核心思想](#13mapreduce核心思想)
@@ -14,6 +13,10 @@
   - [3.3、Hadoop序列化案例](#33hadoop序列化案例)
 - [4、MapReduce核心原理](#4mapreduce核心原理)
   - [4.1、数据输入：InputFormat](#41数据输入inputformat)
+    - [4.1.1、切片与MapTask并行度决定机制](#411切片与maptask并行度决定机制)
+    - [4.1.2、Job提交流程源码和切片源码分析](#412job提交流程源码和切片源码分析)
+    - [4.1.3、FileInputFormat切片源码分析](#413fileinputformat切片源码分析)
+    - [4.1.4、FileInputFormat切片大小的参数配置](#414fileinputformat切片大小的参数配置)
   - [4.2、MapReduce工作流程](#42mapreduce工作流程)
   - [4.3、Shuffle机制](#43shuffle机制)
   - [4.4、数据输出：OutputFormat](#44数据输出outputformat)
@@ -33,6 +36,7 @@
   - [5.5、压缩实操案例](#55压缩实操案例)
 - [6、常见错误及解决方案](#6常见错误及解决方案)
 
+# 1、MapReduce概述
 
 ## 1.1、MapReduce定义
 
