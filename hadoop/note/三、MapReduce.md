@@ -17,6 +17,8 @@
     - [4.1.2、Job提交流程源码和切片源码分析](#412job提交流程源码和切片源码分析)
     - [4.1.3、FileInputFormat切片源码分析](#413fileinputformat切片源码分析)
     - [4.1.4、FileInputFormat切片大小的参数配置](#414fileinputformat切片大小的参数配置)
+    - [4.1.5、常见的InputFormat](#415常见的inputformat)
+    - [4.1.6、CombineTextInputFormat切片机制](#416combinetextinputformat切片机制)
   - [4.2、MapReduce工作流程](#42mapreduce工作流程)
   - [4.3、Shuffle机制](#43shuffle机制)
   - [4.4、数据输出：OutputFormat](#44数据输出outputformat)
@@ -591,6 +593,41 @@ public List<InputSplit> getSplits(JobContext job) throws IOException {
 * mapreduce.input.fileinputformat.split.maxsize：切片最大值，如果值比BlockSize小，则切片会变小并且值等于该参数的值。
 * mapreduce.input.fileinputformat.split.minsize：切片最小值，如果值比BlockSize大，则切片会变大并且值等于该参数的值。
 * 如果maxsize比BlockSize小并且minsize比BlockSize大，则最终生效的是minsize，因为源码中是这样判断的`Math.max(minSize, Math.min(maxSize, blockSize))`，具体细节看源码。
+
+### 4.1.5、常见的InputFormat
+
+* TextInputFormat、KeyValueTextInputFormat、NLineInputFormat、CombineTextInputFormat和自定义InputFormat等等，都是FileInputFormat常见的实现。
+* TextInputFormat：
+  * TextInputFormat是默认的FileInputFormat实现类。
+  * 按行读取每条记录。键是当前行在整个文件中的起始字节偏移量（LongWritable类型）。值是当前行的内容，不包括任何行终止符（换行符和回车符，Text类型）。
+
+### 4.1.6、CombineTextInputFormat切片机制
+
+1. 概述
+
+   默认的**TextInputFormat**切片机制是对任务按文件规划切片，**不管文件多小，都会是一个单独的切片**，都会交给一个MapTask，这样如果有大量小文件，就会产生大量的MapTask，处理效率极其低下。
+
+2. 应用场景
+
+   用于小文件过多的场景，可以将多个小文件从逻辑上规划到一个切片中，这样就可以将多个小文件交给一个MapTask处理。
+
+3. 虚拟存储切片最大值设置
+
+   CombineTextInputFormat.setMaxInputSplitSize(job, 4194304);  // 4m
+
+   > 注意：虚拟存储切片最大值设置最好根据实际的小文件大小情况来设置具体的值。
+
+4. 切片机制，主要包括**虚拟存储过程**和**切片过程**
+   1. 虚拟存储过程：
+      1. 将输入目录下所有文件大小，单个文件依次和设置的maxInputSplitSize值比较，如果**不大于**设置的maxInputSplitSize，逻辑上划分一个**虚拟存储块**。
+      2. 如果输入文件**大于maxInputSplitSize且大于两倍**，那么以maxInputSplitSize切割一块；当剩余数据**大于maxInputSplitSize且不大于maxInputSplitSize两倍**，此时将文件**均分**成两个虚拟存储块（防止出现太小切片）。
+   2. 切片过程：
+      1. 判断虚拟存储块是否大于maxInputSplitSize值，大于等于则单独形成一个切片。
+      2. 如果不大于则跟下一个虚拟存储块进行合并，共同形成一个切片。
+5. 简单举例
+   1. 4个小文件大小分别为：1.7M、5.1M、3.4M、6.8M。
+   2. 虚拟存储过程阶段会被划分为：1.7M，（2.55M、2.55M）、3.4M、（3.4M、3.4M）共6个虚拟存储块。
+   3. 切片过程阶段形成：（1.7M+2.55）M，（2.55+3.4）M，（3.4+3.4）M 共3个切片。
 
 ## 4.2、MapReduce工作流程
 
